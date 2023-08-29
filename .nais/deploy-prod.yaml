@@ -1,0 +1,61 @@
+apiVersion: "nais.io/v1alpha1"
+kind: "Application"
+metadata:
+  name: "pensjon-samhandling-proxy-fss"
+  namespace: "pensjonsamhandling"
+  labels:
+    "team": "pensjonsamhandling"
+spec:
+  webproxy: true # Inject on-premises web proxy configuration into the application pod, trengs i on-prem apps
+  env:
+    - name: PEN_SCOPE
+      value: api://prod-fss.pensjondeployer.pensjon-pen/.default
+    - name: PEN_URL
+      value: https://pensjon-pen.nais.adeo.no/pen/springapi
+    - name: KRIGSPENSJON_GROUP_ID
+      value: {{krigspensjonGroupId}}
+    - name: MASKINPORTEN_ISSUER
+      value: "https://maskinporten.no/"
+  accessPolicy:
+    inbound:
+      rules:
+        - application: pensjon-krigspensjon-api
+          namespace: pensjon-saksbehandling
+          cluster: prod-gcp
+          permissions:
+            scopes:
+              - krigspensjon
+  image: {{image}}
+  liveness:
+    path: "/actuator/health/liveness"
+    port: 8080
+    initialDelay: 20
+    timeout: 60
+  readiness:
+    path: "/actuator/health/readiness"
+    port: 8080
+    initialDelay: 20
+    timeout: 60
+  replicas:
+    min: 2
+    max: 2
+    cpuThresholdPercentage: 50
+  prometheus:
+    enabled: true
+    path: "/actuator/prometheus"
+  resources:
+    limits:
+      memory: "1Gi"
+    requests:
+      cpu: "1"
+      memory: "256Mi"
+  ingresses:
+    - https://pensjon-samhandling-proxy-fss.prod-fss-pub.nais.io
+    - https://pensjon-samhandling-proxy-fss.nais.adeo.no
+  azure:
+    application:
+      enabled: true
+      allowAllUsers: true
+      claims:
+        groups:
+          - id: {{krigspensjonGroupId}}

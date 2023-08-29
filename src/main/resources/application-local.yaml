@@ -1,0 +1,11 @@
+PEN_URL: "https://pensjon-pen-q2.dev.adeo.no/pen/springapi"
+AZURE_OPENID_CONFIG_ISSUER: "https://login.microsoftonline.com/966ac572-f5b7-4bbe-aa88-c76419c0f851/v2.0"
+AZURE_OPENID_CONFIG_TOKEN_ENDPOINT: "https://login.microsoftonline.com/966ac572-f5b7-4bbe-aa88-c76419c0f851/oauth2/v2.0/token"
+AZURE_OPENID_CONFIG_JWKS_URI: "https://login.microsoftonline.com/966ac572-f5b7-4bbe-aa88-c76419c0f851/discovery/v2.0/keys"
+PEN_SCOPE: "api://dev-fss.teampensjon.pensjon-pen-q2/.default"
+AZURE_APP_CLIENT_ID: "d0883b92-b866-42cd-a216-5a0eec745e05"
+KRIGSPENSJON_GROUP_ID: "8bb9b8d1-f46a-4ade-8ee8-5895eccdf8cf"
+MASKINPORTEN_ISSUER: "https://test.maskinporten.no/"
+
+
+AZURE_APP_CLIENT_SECRET: "dummyvalue"

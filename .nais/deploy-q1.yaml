@@ -1,0 +1,83 @@
+apiVersion: "nais.io/v1alpha1"
+kind: "Application"
+metadata:
+  name: "pensjon-samhandling-proxy-fss-q1"
+  namespace: "pensjonsamhandling"
+  labels:
+    "team": "pensjonsamhandling"
+spec:
+  webproxy: true # Inject on-premises web proxy configuration into the application pod, trengs i on-prem apps
+  env:
+    - name: PEN_SCOPE
+      value: api://dev-fss.teampensjon.pensjon-pen-q1/.default
+    - name: PEN_URL
+      value: https://pensjon-pen-q1.nais.preprod.local/pen/springapi
+    - name: KRIGSPENSJON_GROUP_ID
+      value: {{krigspensjonGroupId}}
+    - name: MASKINPORTEN_ISSUER
+      value: "https://test.maskinporten.no/"
+  accessPolicy:
+    inbound:
+      rules:
+        - application: afp-privat
+          namespace: pensjon-saksbehandling
+          cluster: dev-gcp
+          permissions:
+            roles:
+              - afp-privat
+        - application: pensjon
+          namespace: aap
+          cluster: dev-gcp
+          permissions:
+            roles:
+              - aap
+        - application: pensjon-krigspensjon-api
+          namespace: pensjon-saksbehandling
+          cluster: dev-gcp
+          permissions:
+            scopes:
+              - krigspensjon
+        - application: ida
+          namespace: traktor
+          cluster: prod-fss
+        - application: folketrygdbeholdning
+          namespace: pensjonsamhandling
+          cluster: dev-gcp
+          permissions:
+            roles:
+              - folketrygdbeholdning
+  image: {{image}}
+  liveness:
+    path: "/actuator/health/liveness"
+    port: 8080
+    initialDelay: 20
+    timeout: 60
+  readiness:
+    path: "/actuator/health/readiness"
+    port: 8080
+    initialDelay: 20
+    timeout: 60
+  replicas:
+    min: 2
+    max: 2
+    cpuThresholdPercentage: 50
+  prometheus:
+    enabled: true
+    path: "/actuator/prometheus"
+  resources:
+    limits:
+      cpu: "10"
+      memory: "256Mi"
+    requests:
+      cpu: "1"
+      memory: "256Mi"
+  ingresses:
+    - https://pensjon-samhandling-proxy-fss-q1.dev-fss-pub.nais.io
+    - https://pensjon-samhandling-proxy-fss-q1.dev.intern.nav.no
+  azure:
+    application:
+      enabled: true
+      allowAllUsers: true
+      claims:
+        groups:
+          - id: {{krigspensjonGroupId}}

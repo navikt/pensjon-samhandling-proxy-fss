@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+    <appender name="access_stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <!--
+          Using the AccessEventCompositeJsonEncoder instead of LogstashAccessEncoder since
+          we want to add custom fields that receive their values from the request attributes.
+        -->
+        <encoder class="net.logstash.logback.encoder.AccessEventCompositeJsonEncoder">
+            <providers>
+                <!--
+                  Configuring the default Logstash providers in the same order as LogstashAccessEncoder.
+                  Messages are added after the custom fields
+                -->
+                <timestamp/>
+                <version/>
+                <method/>
+                <protocol/>
+                <statusCode/>
+                <requestedUrl/>
+                <requestedUri/>
+                <remoteHost/>
+                <contentLength/>
+                <elapsedTime/>
+
+                <!--
+                  Adding custom fields
+                -->
+                <threadName/>
+                <pattern>
+                    <pattern>
+                        {
+                        "response_code": "#asLong{%statusCode}",
+                        "response_time": "#asLong{%elapsedTime}"
+                        }
+                    </pattern>
+                </pattern>
+
+                <!--
+                  Adding message at end. Makes it easier to find for people not using JQ or similar
+                -->
+                <message/>
+            </providers>
+        </encoder>
+    </appender>
+
+    <appender-ref ref="access_stdout"/>
+</configuration>

@@ -1,0 +1,193 @@
+= Pen-proxy-fss
+
+Dette er en proxy-applikasjon for PEN. Den ligger i FSS, og kan brukes til å nå PEN enten fra GCP, via gateways som kan nås
+fra internett, evt internt i FSS. Applikasjonen støtter Azure AD _client-credentials_ og _on-behalf-of_ for intern tilgang eller Maskinporten for tilgang til eksterne konsumenter.
+
+== Hvordan legge til proxy mot et nytt endepunkt i pen?
+
+Hvis endepunktet som skal legges til allerede har en passende controller bør det nye endepunktet legges inn i den. Hvis ikke, opprett en ny controller.
+
+Hvis du skal legge til endepunkt med samme metode og tilgang som et av de som ligger i controlleren fra før, kan du bare legge til en ny path(tilsvarer delen av pen-pathen som kommer etter _...springapi/pen/_) som under. Følgende er en metode som spesifiserer fire forskjellige get-endepunkter for pathene som er lagt til.
+[source,ruby]
+....
+   @GetMapping(value = [
+        "sokere",
+        "uforeperioder",
+        "vedtak"
+        "ditt/nye/endepunkt/i/PEN"
+    ])
+    override fun get(request: HttpServletRequest) = super.get(request)
+....
+
+Dersom du i tilfellet over skal ha et get-endepunkt med en annen tilgang enn eksisterende controller-metode, lager du en ny metode, som også kaller _super.get_ Feks:
+[source,ruby]
+....
+    @GetMapping(value = [
+        "person"
+    ])
+    fun getMedAnnenRolle(request: HttpServletRequest) = super.get(request)
+....
+
+Når du har lagt til nye endepunkter, legg de til i testklassene _ProxyMappingTest_(se metodene _getPaths_ og _postPaths_) og _EndpointAuthorizationTest_(se metodene _azureAdClientCredentials_, _azureAdOnBehalfOf_ og _maskinporten_). Det vil kjøre noen standard tester.
+
+Tilgang til endepunktene må også spesifiseres, les videre.
+
+== Tilgang
+
+=== Intern tilgang
+
+For at andre applikasjoner skal få tilgang til _pensjon-pen-proxy-fss_ må appen legges inn i _accessPolicy_ i _deploy-{miljø}.yaml_.
+En enkel utgave av dette gjøres slik:
+
+[source,ruby]
+....
+  accessPolicy:
+    inbound:
+      rules:
+        - application: afp-privat
+          namespace: pensjon-saksbehandling
+          cluster: dev-gcp
+....
+Med dette oppsettet vil _afp-privat_ kunne be om tokens fra Azure AD. Enten med _client-credentials_(maskin-til-maskin) flow, der den får default roles-claim _access_as_application_, eller med _on-behalf-of_(på vegne av bruker) flow, der den får default scope-claim _defaultaccess_.
+
+Men vi ønsker å begrense tilgang til endepunktene og ikke bruke default-tilgangene.
+
+==== Client-credentials (maskin-til-maskin)
+Er tokenet som kommer fra klienten et _client-credentials-token_, kan vi legge til en rolle som får aksessere endepunktet:
+....
+  accessPolicy:
+    inbound:
+      rules:
+        - application: afp-privat
+          namespace: pensjon-saksbehandling
+          cluster: dev-gcp
+          permissions:
+            roles:
+              - afp-privat
+....
+
+
+Nå vil azure ad-token fra applikasjone  _afp-privat_
+til _Pensjon-pen-proxy-fss_ inneholde rollen _afp-privat_ i roles-claimet. Du kan legge til flere roller for en applikasjon i yaml-en, slik at du kan kalle endepunkter med forskjellig tilgang. Og du kan gi flere applikasjoner en bestemt rolle, så alle kan kalle endepunkt med en bestemt rolle.
+
+For å faktisk utføre autoriseringen på endepunktene legges
+en _@PreAuthorize("hasAuthority('AZURE_ROLE_dinrolle')")_. Hvis man skipper _PreAuthorize_, så er endepunktene åpne for alle apper som er definert i inbound i _deploy-{miljø}.yaml_, det ønsker vi ikke. Med configen under, er appen bare tilgjengelig med _client-credentials_ tokens, og de må inneholde _afp-privat_ i roles-claimet.
+
+
+
+[source,ruby]
+....
+@PreAuthorize("hasAuthority('AZURE_ROLE_afp-privat')")
+@GetMapping(value = [
+    "sokere",
+    "uforeperioder",
+    "vedtak"
+])
+....
+
+
+==== On-behalf-of(på vegne av bruker)
+Er tokenet fra klienten av typen _on-behalf-of_ kan vi legge til et scope som får aksessere endepunktet:
+....
+  accessPolicy:
+    inbound:
+      rules:
+        - application: krigspensjon
+          namespace: pensjon-saksbehandling
+          cluster: dev-gcp
+          permissions:
+            scopes:
+              - krigspensjon
+....
+
+
+Nå vil azure ad-token fra applikasjonen _krigspensjon_
+til _Pensjon-pen-proxy-fss_ inneholde scopet _"krigspensjon"_ i scope-claimet. Du kan legge til flere scopes for en applikasjon i yaml-en, slik at du kan kalle endepunkter med forskjellig tilgang. Og du kan gi flere applikasjoner et bestemt scope, så alle kan kalle endepunkt med en bestemt rolle.
+
+Dette gir alle brukere som kaller via krigspensjon-appen tilgang.
+
+Som regel ønsker vi å validere at personen det kalles på vegne av også er medlem av en bestemt ad-gruppe. Da må vi i tillegg legge til gruppen i _claim.groups_ i _deploy-{miljø}_ -configen:
+
+....
+  azure:
+    application:
+      enabled: true
+      allowAllUsers: true
+      claims:
+        groups:
+          - id: {{krigspensjonGroupId}}
+....
+Id-en er det som heter _Object Id_ inne på gruppen i Azure portal. Dette er en generell config, som sier at hver gang en applikasjon ber om et token mot pensjon-pen-proxy-fss på vegne av en bruker, så vil groups claimet inneholde denne ad-gruppen dersom brukeren ligger i ad-gruppen, uavhengig av hvilket endepunkt det er som kalles.
+
+Vi må også sørge for at gruppen legges inn i en env-variabel, så den kan nås fra applikasjonen.
+....
+  env:
+    - name: KRIGSPENSJON_GROUP_ID
+      value: {{krigspensjonGroupId}}
+....
+
+I dette tilfellet har vi definert variabelen i env-{miljø}.yaml, slik at vi kan hente den ut i yaml-filen med {{krigspensjonGroupId}}.
+
+Det vi har gjort nå, gjør at groups-claimet vil inneholde id-en fra _krigspensjonGroupId_. Vi har altså både et scope-claim, som sier hvilke tilganger applikasjonen som kaller har, og groups-claim som sier hvilke tilganger bruker har. Dette kan vi validere i controlleren:
+[source,ruby]
+....
+    @PreAuthorize("hasAuthority('AZURE_SCOPE_krigspensjon') AND hasAuthority('GROUP_'.concat(@environment.getProperty('KRIGSPENSJON_GROUP_ID')))")
+    @GetMapping(value = [""])
+    override fun get(request: HttpServletRequest) = super.get(request)
+....
+Her peker _@environment.getProperty..._ på variabelen vi har definert i _deploy-{miljø}_.
+
+Ønsker du både _client credentials_ og _on-behalf-of_-tilgang til endepunktet, kan du kombinere dette i _@PreAuthorize_ ved å OR-e mellom forskjellige _hasAuthority_, feks.
+[source,ruby]
+....
+@PreAuthorize("hasAuthority('AZURE_ROLE_abc') OR hasAuthority('AZURE_SCOPE_xyz') AND hasAuthority('AZURE_GROUP_qwe')")
+....
+
+=== Ekstern tilgang
+
+For å kunne nå appen via gateways har vi lagt til støtte for å validere tokens utstedt av Maskinporten. For å få til dette må tilgangen konfigureres i yaml-fil, slik det er gjort her:
+[source,ruby]
+....
+- name: "v1/ytelse"
+enabled: true
+product: "pensjon"
+allowedIntegrations:
+- maskinporten
+atMaxAge: 120
+consumers:
+- name: "HDIR"
+orgno: "983544622"
+- name: "GABLER PENSJONSTJENESTER AS"
+orgno: "916833520"
+- name: "NAV"
+orgno: "889640782"
+....
+
+Se nais-doc for detaljene https://docs.nais.io/security/auth/maskinporten/scopes/
+
+I tilfellet over har configen laget maskinporten-scopet nav:pensjon/v1/ytelse. For å autorisere dette i controllerene, gjør man slik:
+[source,ruby]
+....
+    @PreAuthorize("hasAuthority('MASKINPORTEN_nav:pensjon/v1/ytelse')")
+    @GetMapping(path = ["ytelse", "ytelse/"])
+    fun ytelse(request: HttpServletRequest) = super.get(request)
+....
+
+Ønsker du både intern og ekstern tilgang til endepunktet, kan du fint kombinere dette i _@PreAuthorize_ ved å OR-e mellom forskjellige _hasAuthority_, feks.
+[source,ruby]
+....
+@PreAuthorize("hasAuthority('AZURE_ROLE_abc') OR hasAuthority('MASKINPORTEN_xyz')")
+....
+
+== Lokal kjøring
+Kjør med profil _local_. Juster på properties i _application-local.yaml_. Legg til evt group-id-variabler som trengs(properties som hentes via _@environment_ i @PreAuthorize evalueres ikke før requesten kommer). Vi trenger client secret for å gjøre kall mot azure. Den kan hentes ut fra en kjørende pod slik:
+....
+kubectl -n pensjon-saksbehandling exec -it pensjon-pen-proxy-fss-q2-5c7bdb8cd4-hbjtl -- cat /run/secrets/nais.io/azure/AZURE_APP_CLIENT_SECRET
+....
+
+For å autentisere deg mot tjenesten trenger du et azure-token fra en tjeneste som har tilgang til appen. Se postman collection i _README/AzureAD.postman_collection.json_ for eksempel på _client-credentials_ og _on-behalf-of_ kall mot Azure AD. Legg inn client id og client secret fra app som har tilgang(som definert i inbound _spec.accessPolicy.inbound.rules_ i deploy-filer).
+
+== Appendix
+
+* https://docs.nais.io/appendix/zero-trust/
+* https://docs.nais.io/security/auth/azure-ad/access-policy/

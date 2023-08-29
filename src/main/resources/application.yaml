@@ -1,0 +1,28 @@
+spring:
+  main:
+    banner-mode: off
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AZURE_OPENID_CONFIG_ISSUER}
+          jwk-set-uri:  ${AZURE_OPENID_CONFIG_JWKS_URI}
+
+      client:
+        registration:
+          pen-client-credentials: #navngir ressurs
+            provider: aad
+            client-id: ${AZURE_APP_CLIENT_ID}
+            client-secret: ${AZURE_APP_CLIENT_SECRET}
+            authorization-grant-type: client_credentials
+            scope: ${PEN_SCOPE}
+        provider:
+          aad: #navngir ressurs
+            token-uri: ${AZURE_OPENID_CONFIG_TOKEN_ENDPOINT}
+            jwk-set-uri: ${AZURE_OPENID_CONFIG_JWKS_URI}
+            issuer-uri: ${AZURE_OPENID_CONFIG_ISSUER}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
