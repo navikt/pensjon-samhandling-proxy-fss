@@ -24,7 +24,7 @@ import java.time.ZoneId
 import java.util.*
 
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = arrayOf(PensjonPenProxyFssApplication::class))
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [Application::class])
 @AutoConfigureMockMvc
 class MaskinportenResourceServerTest(@Autowired private val mockMvc: MockMvc, @Autowired restTemplate: RestTemplate, @Value("\${PEN_URL}") private val penUrl: String) {
     private val mockRestServiceServer = MockRestServiceServer.bindTo(restTemplate).build()

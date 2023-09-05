@@ -14,10 +14,10 @@ data class MaskinportenAuthorization(var method: HttpMethod, var path: String, v
 
 @TestConfiguration
 class RestTemplateTestConfig(@Value("\${PEN_URL}") private val penUrl: String) {
-    @Bean("restTemplate")
+   /* @Bean("restTemplate")
     fun restTemplateWithoutOAuthInterceptor(): RestTemplate {
         return RestTemplateBuilder()
             .uriTemplateHandler(DefaultUriBuilderFactory(penUrl))
             .build()
-    }
+    }*/
 }

@@ -27,10 +27,10 @@ import java.util.stream.Stream
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = [PensjonPenProxyFssApplication::class]
+    classes = [Application::class]
 )
 @AutoConfigureMockMvc
-@Import(RestTemplateTestConfig::class)
+//@Import(RestTemplateTestConfig::class)
 @SecurityDisabled
 class ProxyMappingTest(@Autowired private val mockMvc: MockMvc, @Autowired restTemplate: RestTemplate,
                        @Value("\${PEN_URL}") private val penUrl: String) {
